@@ -1,25 +1,35 @@
-# server/app.py
-
 from flask import Flask
-from flask_migrate import Migrate
+from models import db, Pet
+import os
 
-from models import db
+app = Flask(__name__, instance_relative_config=True)
 
-# create a Flask application instance 
-app = Flask(__name__)
+db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'pets.db')
 
-# configure the database connection to the local file app.db
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-
-# configure flag to disable modification tracking and use less memory
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# create a Migrate object to manage schema modifications
-migrate = Migrate(app, db)
+# Ensure the instance folder exists if using Option A
+os.makedirs(app.instance_path, exist_ok=True)
 
-# initialize the Flask application to use the database
 db.init_app(app)
 
+# Create tables and seed data
+with app.app_context():
+    db.create_all()
+    if not Pet.query.first():
+        db.session.add_all([
+            Pet(name="Fido", species="Dog"),
+            Pet(name="Whiskers", species="Cat"),
+            Pet(name="Tweety", species="Bird"),
+        ])
+        db.session.commit()
 
-if __name__ == '__main__':
-    app.run(port=5555, debug=True)
+@app.route("/pets")
+def get_pets():
+    pets = Pet.query.all()
+    return {"pets": [{"id": p.id, "name": p.name, "species": p.species} for p in pets]}
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
